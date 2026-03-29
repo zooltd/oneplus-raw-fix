@@ -1,0 +1,7 @@
+interface:
+  display_name: "OnePlus RAW Fix"
+  short_description: "Repair stretched OnePlus RAW and DNG files"
+  default_prompt: "Use $oneplus-raw-fix to find and fix stretched DNG files in this gallery folder."
+
+policy:
+  allow_implicit_invocation: true

@@ -40,28 +40,37 @@ pip install tifffile
 
 ---
 
+## Agent Skill
+
+This repository also includes a reusable Codex-compatible skill at `skills/oneplus-raw-fix/`.
+
+Once this repo is published on GitHub, users can install it with the skills CLI:
+
+```bash
+npx skills add <owner>/oneplus-raw-fix --skill oneplus-raw-fix
+```
+
+The skill is meant for agents helping users scan a photos or gallery folder, find affected `.dng` files, and run this fixer with either a safe output directory or `--in-place` when explicitly requested.
+
+---
+
 ## Usage
 
 ```bash
 # Output saved as <original>_4x3.dng next to the source file
-python fix_dng_aspect.py photo.dng
+python oneplus_raw_fix.py photo.dng
 
-# Or specify an output path
-python fix_dng_aspect.py photo.dng fixed_photo.dng
+# Write fixed files into a directory
+python oneplus_raw_fix.py photos/*.dng --output-dir fixed/
+
+# Overwrite the originals
+python oneplus_raw_fix.py photos/*.dng --in-place
 ```
 
 ### Example output
 
 ```
-Source:         IMG20250524142353.dng
-Raw dimensions: 4096 x 1864  (ratio 2.1974)
-DefaultScale:   H=1.0000  V=1.0000
-
-Target DefaultScale V: 1.648069  →  384/233 = 1.648069
-Rendered size will be: 4096 x 3072  (ratio 1.3333)
-
-Written: IMG20250524142353_4x3.dng
-DefaultScale V confirmed: 1.648069
+FIXED   IMG20250524142353.dng -> IMG20250524142353_4x3.dng
 ```
 
 ---
@@ -76,5 +85,5 @@ DefaultScale V confirmed: 1.648069
 ## Notes
 
 - All raw pixel data, color profiles, lens corrections, and EXIF metadata are preserved.
-- If the file is already 4:3, the script exits without making any changes.
+- If the file is already correct, the script reports it as skipped and does not modify it.
 - May work on other devices with the same `DefaultScale` metadata bug.
