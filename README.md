@@ -1,6 +1,6 @@
 # oneplus-raw-fix
 
-Fix horizontally stretched RAW (`.dng`) photos from newer OnePlus 12 and OnePlus 13 builds.
+Repair newer OnePlus RAW (`.dng`) photos from newer affected builds so they render as uncropped 4:3.
 
 > **Reported issue:** [OnePlus 13 and OnePlus 12 RAW photos are stretched — Adobe Community](https://community.adobe.com/bug-reports-679/p-oneplus13-and-oneplus12-raw-photos-are-stretched-662257)
 
@@ -8,11 +8,11 @@ Fix horizontally stretched RAW (`.dng`) photos from newer OnePlus 12 and OnePlus
 
 ## The Problem
 
-OnePlus 12 and OnePlus 13 users report that RAW (`.dng`) photos appear **horizontally stretched and unusable** when opened in any app outside the phone's own gallery — including Lightroom Mobile, Lightroom Desktop, Photoshop, RawTherapee, Windows Photos, and Gwenview.
+OnePlus 12 and OnePlus 13 users report that RAW (`.dng`) photos from newer builds can appear **horizontally stretched and unusable** when opened in apps outside the phone's own gallery — including Lightroom Mobile, Lightroom Desktop, Photoshop, RawTherapee, Windows Photos, and Gwenview.
 
 JPEGs from the same phone are unaffected. The issue has been reproduced on newer OnePlus builds with RAW files shot in non-4:3 aspect ratios (16:9, 1:1, etc.).
 
-Community findings: the phone stores the full 4:3 sensor image in the `.dng` regardless of the selected aspect ratio, but encodes the intended crop in metadata. Apps like Lightroom ignore the crop hint and squish the full 4:3 data into the selected aspect ratio instead. Photos shot in **4:3 mode are unaffected**.
+Some older files from previous builds already behave correctly and should be left alone. This tool targets the newer affected files that need `DefaultScale` repaired so apps stop stretching the stored RAW data. Photos shot in **4:3 mode are unaffected**.
 
 ---
 
@@ -22,7 +22,7 @@ The script patches the `DefaultScale` metadata tag (TIFF tag `0xC61E`) anywhere 
 
 To keep repaired output aligned with older, non-affected captures, the script only applies the fix by default to newer OnePlus Android 15+ builds. Older files are reported as skipped.
 
-**No pixel data is modified.** It is an 8-byte metadata-only change.
+**No pixel data is modified.** It is a metadata-only change touching the `DefaultScale` values stored in the DNG image stack.
 
 | | Raw pixels | Rendered |
 |---|---|---|
@@ -31,9 +31,9 @@ To keep repaired output aligned with older, non-affected captures, the script on
 
 ## Important Limitation
 
-This tool is an aspect-ratio fix, not a crop fix.
+This tool does not crop RAW data.
 
-OnePlus stores the full sensor RAW data in the `.dng`, while the embedded preview reflects the phone's selected composition such as 16:9. Correcting `DefaultScale` makes RAW processors display the full RAW image at the right 4:3 aspect ratio, but it does **not** make the RAW automatically respect the preview crop.
+Correcting `DefaultScale` changes only display geometry, so the RAW can render as uncropped 4:3 while previews still reflect the phone's selected framing.
 
 In practice, after fixing:
 
@@ -41,7 +41,7 @@ In practice, after fixing:
 - the RAW image can render as uncropped 4:3
 - some apps may therefore show a preview that does not match the RAW composition
 
-This is expected for the current tool. Matching the phone preview would require changing crop-related DNG metadata, regenerating the embedded preview, or actually cropping RAW image data.
+This is expected. Matching the phone preview more aggressively would require changing crop-related DNG metadata, regenerating the embedded preview, or actually cropping RAW image data.
 
 ---
 
@@ -85,9 +85,7 @@ python oneplus_raw_fix.py photos/*.dng --in-place
 
 ### Example output
 
-```
-FIXED   IMG20250524142353.dng -> IMG20250524142353_4x3.dng
-```
+`<original>_4x3.dng`
 
 ---
 
@@ -103,4 +101,5 @@ FIXED   IMG20250524142353.dng -> IMG20250524142353_4x3.dng
 - All raw pixel data, color profiles, lens corrections, and EXIF metadata are preserved.
 - If the file is already correct, the script reports it as skipped and does not modify it.
 - Older OnePlus captures are also skipped by default so the output stays aligned with previous non-affected versions.
+- Older correct DNGs are useful as behavioral references, but the script does not copy their crop, color, or build metadata into newer files.
 - May work on other devices with the same `DefaultScale` metadata bug.

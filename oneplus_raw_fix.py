@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fix horizontally stretched DNG files from OnePlus 12/13 (and similar phones).
+"""Repair DNG render metadata for newer OnePlus 12/13 (and similar phones).
 
-Patches the DefaultScale metadata tag so DNG-compliant software renders
-the image at the correct 4:3 aspect ratio. No pixel data is modified.
+Patches the DefaultScale metadata tag so DNG-compliant software renders the
+stored RAW data as uncropped 4:3. No pixel data is modified.
 
 See: https://community.adobe.com/bug-reports-679/p-oneplus13-and-oneplus12-raw-photos-are-stretched-662257
 """
@@ -48,9 +48,9 @@ def detect_byte_order(path):
 
 
 def get_dng_info(path):
-    """Read DefaultScale and raw dimensions from a DNG file.
+    """Read DefaultScale locations and raw dimensions from a DNG file.
 
-    Returns (scale_h, scale_v, valueoffset, raw_width, raw_height, make, software).
+    Returns (scale_h, scale_v, scale_entries, raw_width, raw_height, make, software).
     Raises ValueError if the file lacks the expected DNG tags.
     """
     with tifffile.TiffFile(path) as tif:
@@ -66,9 +66,19 @@ def get_dng_info(path):
         make_value = make.value if make else None
         software_value = software.value if software else None
 
+        scale_entries = [(tag.valueoffset, scale_h, scale_v)]
+
         # Raw dimensions live in a SubIFD (raw CFA), not the IFD0 thumbnail.
         raw_w = raw_h = None
         for sub in ifd0.pages or []:
+            sub_scale = sub.tags.get(DEFAULT_SCALE_TAG)
+            if sub_scale is not None:
+                sub_value = sub_scale.value
+                scale_entries.append((
+                    sub_scale.valueoffset,
+                    Fraction(int(sub_value[0]), int(sub_value[1])),
+                    Fraction(int(sub_value[2]), int(sub_value[3])),
+                ))
             bps = sub.tags.get(258)  # BitsPerSample
             if bps is None:
                 continue
@@ -87,12 +97,33 @@ def get_dng_info(path):
     return (
         scale_h,
         scale_v,
-        tag.valueoffset,
+        scale_entries,
         raw_w,
         raw_h,
         make_value,
         software_value,
     )
+
+
+def expected_full_4x3_scale(scale_h, raw_w, raw_h, target=TARGET_RATIO):
+    """Return the DefaultScale needed to render the stored RAW data as 4:3."""
+    pixel_ratio = Fraction(raw_w, raw_h)
+    scale_v = pixel_ratio / target * scale_h
+    return scale_h, Fraction(scale_v).limit_denominator(10000)
+
+
+def scale_entries_match(scale_entries, expected_scale_h, expected_scale_v):
+    """Return True if every DefaultScale entry matches the expected value."""
+    return all(
+        entry_scale_h == expected_scale_h and entry_scale_v == expected_scale_v
+        for _, entry_scale_h, entry_scale_v in scale_entries
+    )
+
+
+def default_output_path(src):
+    """Return the default output filename."""
+    base, ext = os.path.splitext(src)
+    return f"{base}_4x3{ext}"
 
 
 def fix_file(src, dst, target=TARGET_RATIO):
@@ -101,40 +132,46 @@ def fix_file(src, dst, target=TARGET_RATIO):
     Returns "fixed", "already-correct", or "unsupported-build".
     """
     byte_order = detect_byte_order(src)
-    scale_h, scale_v, offset, raw_w, raw_h, make, software = get_dng_info(src)
-    pixel_ratio = Fraction(raw_w, raw_h)
+    scale_h, scale_v, scale_entries, raw_w, raw_h, make, software = get_dng_info(src)
+    expected_scale_h, expected_scale_v = expected_full_4x3_scale(
+        scale_h,
+        raw_w,
+        raw_h,
+        target,
+    )
 
-    # Already correct — either pixels are 4:3 or DefaultScale already compensates
-    rendered_ratio = pixel_ratio * scale_h / scale_v
-    if rendered_ratio == target:
+    if scale_v == expected_scale_v and scale_entries_match(
+        scale_entries,
+        expected_scale_h,
+        expected_scale_v,
+    ):
         return "already-correct"
 
     android_version = parse_android_version(software)
     if make != "OnePlus" or android_version is None or android_version < MIN_ANDROID_VERSION:
         return "unsupported-build"
 
-    new_scale_v = pixel_ratio / target * scale_h
-    frac = Fraction(new_scale_v).limit_denominator(10000)
-
     if src != dst:
         shutil.copy2(src, dst)
 
     fmt = f"{byte_order}IIII"
+    payload = struct.pack(
+        fmt,
+        expected_scale_h.numerator,
+        expected_scale_h.denominator,
+        expected_scale_v.numerator,
+        expected_scale_v.denominator,
+    )
     with open(dst, "r+b") as f:
-        f.seek(offset)
-        f.write(struct.pack(
-            fmt,
-            scale_h.numerator,
-            scale_h.denominator,
-            frac.numerator,
-            frac.denominator,
-        ))
+        for offset, _, _ in scale_entries:
+            f.seek(offset)
+            f.write(payload)
     return "fixed"
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fix horizontally stretched DNG files from OnePlus phones.",
+        description="Repair render metadata in newer OnePlus DNG files.",
         epilog="Examples:\n"
                "  %(prog)s IMG_001.dng\n"
                "  %(prog)s *.dng --in-place\n"
@@ -185,8 +222,7 @@ def main():
         elif args.output_dir:
             dst = os.path.join(args.output_dir, os.path.basename(src))
         else:
-            base, ext = os.path.splitext(src)
-            dst = f"{base}_4x3{ext}"
+            dst = default_output_path(src)
 
         try:
             result = fix_file(src, dst)
