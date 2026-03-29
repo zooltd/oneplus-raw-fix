@@ -10,6 +10,7 @@ See: https://community.adobe.com/bug-reports-679/p-oneplus13-and-oneplus12-raw-p
 import argparse
 import glob
 import os
+import re
 import shutil
 import struct
 import sys
@@ -22,6 +23,17 @@ except ImportError:
 
 TARGET_RATIO = Fraction(4, 3)
 DEFAULT_SCALE_TAG = 50718  # TIFF tag 0xC61E
+MIN_ANDROID_VERSION = 15
+
+
+def parse_android_version(software):
+    """Extract the Android major version from the Software tag if present."""
+    if not software:
+        return None
+    match = re.search(r"/[^/]+:(\d+)/", software)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 def detect_byte_order(path):
@@ -38,7 +50,7 @@ def detect_byte_order(path):
 def get_dng_info(path):
     """Read DefaultScale and raw dimensions from a DNG file.
 
-    Returns (scale_h, scale_v, valueoffset, raw_width, raw_height).
+    Returns (scale_h, scale_v, valueoffset, raw_width, raw_height, make, software).
     Raises ValueError if the file lacks the expected DNG tags.
     """
     with tifffile.TiffFile(path) as tif:
@@ -49,6 +61,10 @@ def get_dng_info(path):
         v = tag.value  # (num_h, den_h, num_v, den_v)
         scale_h = Fraction(int(v[0]), int(v[1]))
         scale_v = Fraction(int(v[2]), int(v[3]))
+        make = ifd0.tags.get(271)
+        software = ifd0.tags.get(305)
+        make_value = make.value if make else None
+        software_value = software.value if software else None
 
         # Raw dimensions live in a SubIFD (raw CFA), not the IFD0 thumbnail.
         raw_w = raw_h = None
@@ -68,19 +84,34 @@ def get_dng_info(path):
             raw_w = ifd0.tags[256].value
             raw_h = ifd0.tags[257].value
 
-    return scale_h, scale_v, tag.valueoffset, raw_w, raw_h
+    return (
+        scale_h,
+        scale_v,
+        tag.valueoffset,
+        raw_w,
+        raw_h,
+        make_value,
+        software_value,
+    )
 
 
 def fix_file(src, dst, target=TARGET_RATIO):
-    """Patch DefaultScale in a single DNG file. Returns True if patched."""
+    """Patch DefaultScale in a single DNG file.
+
+    Returns "fixed", "already-correct", or "unsupported-build".
+    """
     byte_order = detect_byte_order(src)
-    scale_h, scale_v, offset, raw_w, raw_h = get_dng_info(src)
+    scale_h, scale_v, offset, raw_w, raw_h, make, software = get_dng_info(src)
     pixel_ratio = Fraction(raw_w, raw_h)
 
     # Already correct — either pixels are 4:3 or DefaultScale already compensates
     rendered_ratio = pixel_ratio * scale_h / scale_v
     if rendered_ratio == target:
-        return False
+        return "already-correct"
+
+    android_version = parse_android_version(software)
+    if make != "OnePlus" or android_version is None or android_version < MIN_ANDROID_VERSION:
+        return "unsupported-build"
 
     new_scale_v = pixel_ratio / target * scale_h
     frac = Fraction(new_scale_v).limit_denominator(10000)
@@ -91,9 +122,14 @@ def fix_file(src, dst, target=TARGET_RATIO):
     fmt = f"{byte_order}IIII"
     with open(dst, "r+b") as f:
         f.seek(offset)
-        f.write(struct.pack(fmt, scale_h.numerator, scale_h.denominator,
-                            frac.numerator, frac.denominator))
-    return True
+        f.write(struct.pack(
+            fmt,
+            scale_h.numerator,
+            scale_h.denominator,
+            frac.numerator,
+            frac.denominator,
+        ))
+    return "fixed"
 
 
 def main():
@@ -136,6 +172,7 @@ def main():
 
     fixed = 0
     skipped = 0
+    unsupported = 0
     errors = 0
     for src in paths:
         if not os.path.isfile(src):
@@ -152,21 +189,31 @@ def main():
             dst = f"{base}_4x3{ext}"
 
         try:
-            if fix_file(src, dst):
+            result = fix_file(src, dst)
+            if result == "fixed":
                 fixed += 1
                 if dst == src:
                     print(f"FIXED   {src}")
                 else:
                     print(f"FIXED   {src} -> {dst}")
-            else:
+            elif result == "already-correct":
                 skipped += 1
                 print(f"SKIPPED {src} (already correct)")
+            else:
+                unsupported += 1
+                print(
+                    f"SKIPPED {src} "
+                    f"(not a newer affected OnePlus build; default behavior only fixes Android {MIN_ANDROID_VERSION}+ captures)"
+                )
         except (ValueError, OSError) as e:
             print(f"ERROR   {src}: {e}", file=sys.stderr)
             errors += 1
 
     if len(paths) > 1:
-        print(f"\nSummary: {fixed} fixed, {skipped} skipped, {errors} errors")
+        print(
+            f"\nSummary: {fixed} fixed, {skipped} already-correct, "
+            f"{unsupported} unsupported-build, {errors} errors"
+        )
 
     return 1 if errors else 0
 

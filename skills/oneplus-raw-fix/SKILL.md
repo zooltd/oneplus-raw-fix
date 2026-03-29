@@ -1,15 +1,15 @@
 ---
 name: oneplus-raw-fix
-description: Use when a user wants to find and fix horizontally stretched phone RAW or DNG files in a photos or gallery folder, especially OnePlus 12 and OnePlus 13 images that need DefaultScale metadata corrected.
+description: Use when a user wants to find and fix horizontally stretched phone RAW or DNG files from newer affected OnePlus builds in a photos or gallery folder, especially OnePlus 12 and OnePlus 13 images that need DefaultScale metadata corrected.
 ---
 
 # OnePlus RAW Fix
 
-Use this skill to repair stretched `.dng` files in a gallery or photos folder with the bundled script at `scripts/oneplus_raw_fix.py`.
+Use this skill to repair stretched `.dng` files from newer affected OnePlus builds in a gallery or photos folder with the bundled script at `scripts/oneplus_raw_fix.py`.
 
 ## Use this skill when
 
-- A gallery folder contains stretched RAW or DNG photos
+- A gallery folder contains stretched RAW or DNG photos from newer affected OnePlus builds
 - OnePlus 12 or OnePlus 13 `.dng` files render at the wrong aspect ratio
 - The user wants to batch-fix a folder of affected photos
 - The user wants a safe output-folder workflow before overwriting originals
@@ -17,7 +17,7 @@ Use this skill to repair stretched `.dng` files in a gallery or photos folder wi
 ## Workflow
 
 1. Read `README.md` and `scripts/oneplus_raw_fix.py` if behavior needs confirmation.
-2. Identify target `.dng` files in the user-provided folder.
+2. Identify target `.dng` files in the user-provided folder, prioritizing newer affected OnePlus captures.
 3. Prefer writing fixed files to a separate output directory first.
 4. Use `--in-place` only when the user explicitly wants originals overwritten.
 5. Report which files were fixed, skipped, or failed.
@@ -39,6 +39,7 @@ If the user points to a gallery directory and wants affected DNGs located first,
 - Default output is `<original>_4x3.dng` next to the source file.
 - Prefer `--output-dir` for bulk runs unless the user requests in-place edits.
 - Keep the fix scoped to metadata only. Do not alter pixel data or unrelated EXIF fields.
+- Older OnePlus captures should be skipped by default so repaired output stays aligned with previous non-affected versions.
 
 ## Validation
 
