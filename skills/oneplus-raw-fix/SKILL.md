@@ -5,7 +5,7 @@ description: Use when a user wants to find and fix horizontally stretched phone 
 
 # OnePlus RAW Fix
 
-Use this skill to repair stretched `.dng` files in a gallery or photos folder with the `oneplus_raw_fix.py` script in this repository.
+Use this skill to repair stretched `.dng` files in a gallery or photos folder with the bundled script at `scripts/oneplus_raw_fix.py`.
 
 ## Use this skill when
 
@@ -16,7 +16,7 @@ Use this skill to repair stretched `.dng` files in a gallery or photos folder wi
 
 ## Workflow
 
-1. Read `README.md` and `oneplus_raw_fix.py` if behavior needs confirmation.
+1. Read `README.md` and `scripts/oneplus_raw_fix.py` if behavior needs confirmation.
 2. Identify target `.dng` files in the user-provided folder.
 3. Prefer writing fixed files to a separate output directory first.
 4. Use `--in-place` only when the user explicitly wants originals overwritten.
@@ -27,9 +27,9 @@ Use this skill to repair stretched `.dng` files in a gallery or photos folder wi
 Use the script directly:
 
 ```bash
-python3 oneplus_raw_fix.py photo.dng
-python3 oneplus_raw_fix.py photos/*.dng --output-dir fixed/
-python3 oneplus_raw_fix.py photos/*.dng --in-place
+python3 scripts/oneplus_raw_fix.py photo.dng
+python3 scripts/oneplus_raw_fix.py photos/*.dng --output-dir fixed/
+python3 scripts/oneplus_raw_fix.py photos/*.dng --in-place
 ```
 
 If the user points to a gallery directory and wants affected DNGs located first, prefer `fd -e dng` when available. Fall back to `find` if needed.
@@ -45,8 +45,8 @@ If the user points to a gallery directory and wants affected DNGs located first,
 Run lightweight checks when changing or relying on the script behavior:
 
 ```bash
-python3 oneplus_raw_fix.py --help
-python3 -m py_compile oneplus_raw_fix.py
+python3 scripts/oneplus_raw_fix.py --help
+python3 -m py_compile scripts/oneplus_raw_fix.py
 ```
 
 ## Avoid

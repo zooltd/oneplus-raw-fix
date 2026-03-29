@@ -50,7 +50,7 @@ Once this repo is published on GitHub, users can install it with the skills CLI:
 npx skills add <owner>/oneplus-raw-fix --skill oneplus-raw-fix
 ```
 
-The skill is meant for agents helping users scan a photos or gallery folder, find affected `.dng` files, and run this fixer with either a safe output directory or `--in-place` when explicitly requested.
+The skill is meant for agents helping users scan a photos or gallery folder, find affected `.dng` files, and run its bundled fixer script with either a safe output directory or `--in-place` when explicitly requested.
 
 ---
 
