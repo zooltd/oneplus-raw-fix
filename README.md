@@ -1,23 +1,33 @@
-# fix-dng-aspect
+# oneplus-raw-fix
 
-Fix OnePlus (and similar phone) DNG raw files that appear **horizontally stretched** when opened in Lightroom, RawTherapee, Windows Photos, or any other raw editor.
+Fix horizontally stretched RAW (`.dng`) photos from OnePlus 12 and OnePlus 13 phones.
+
+> **Reported issue:** [OnePlus 13 and OnePlus 12 RAW photos are stretched — Adobe Community](https://community.adobe.com/bug-reports-679/p-oneplus13-and-oneplus12-raw-photos-are-stretched-662257)
+
+---
 
 ## The Problem
 
-OnePlus phones (and potentially others) write DNG files where the `DefaultScale` tag is incorrectly set to `1.0 × 1.0` (square pixels), even though the sensor readout uses non-square pixels. This causes every DNG-aware application to render the image at the wrong aspect ratio — typically around **2.2:1 instead of 4:3** — making subjects look unnaturally wide and squished.
+OnePlus 12 and OnePlus 13 users report that RAW (`.dng`) photos appear **horizontally stretched and unusable** when opened in any app outside the phone's own gallery — including Lightroom Mobile, Lightroom Desktop, Photoshop, RawTherapee, Windows Photos, and Gwenview.
 
-The embedded JPEG preview inside the DNG is unaffected, so the image looks correct for the first second while the preview loads, then snaps to the stretched version once the raw data finishes decoding.
+JPEGs from the same phone are unaffected. The issue only occurs with RAW files shot in non-4:3 aspect ratios (16:9, 1:1, etc.).
+
+Community findings: the phone stores the full 4:3 sensor image in the `.dng` regardless of the selected aspect ratio, but encodes the intended crop in metadata. Apps like Lightroom ignore the crop hint and squish the full 4:3 data into the selected aspect ratio instead. Photos shot in **4:3 mode are unaffected**.
+
+---
 
 ## The Fix
 
-The script patches a single metadata tag (`DefaultScale`, tag `0xC61E`) in the DNG file, setting the vertical scale factor so the rendered output matches a correct 4:3 aspect ratio. No pixel data is modified — it is a metadata-only change of 8 bytes.
+The script patches a single metadata tag — `DefaultScale` (TIFF tag `0xC61E`) — in the `.dng` file. OnePlus incorrectly writes this as `1.0 × 1.0` (square pixels). Setting the vertical scale factor to the correct value tells all DNG-compliant software to render the image at the proper 4:3 aspect ratio.
 
-Before → After:
+**No pixel data is modified.** It is an 8-byte metadata-only change.
 
 | | Raw pixels | Rendered |
 |---|---|---|
 | **Before** | 4096 × 1864 | 4096 × 1864 (2.2:1, stretched) |
 | **After** | 4096 × 1864 | 4096 × 3072 (4:3, correct) |
+
+---
 
 ## Requirements
 
@@ -27,6 +37,8 @@ Before → After:
 ```bash
 pip install tifffile
 ```
+
+---
 
 ## Usage
 
@@ -52,13 +64,17 @@ Written: IMG20250524142353_4x3.dng
 DefaultScale V confirmed: 1.648069
 ```
 
+---
+
 ## Tested with
 
 - OnePlus 12 (CPH2583)
 - Lightroom, RawTherapee, Windows Photos, Gwenview
 
+---
+
 ## Notes
 
-- The script only modifies the `DefaultScale` TIFF tag. All raw pixel data, color profiles, lens corrections, and EXIF metadata are preserved.
-- If the file already has a 4:3 aspect ratio, the script exits without making any changes.
-- The fix applies to any DNG where `DefaultScale` is incorrectly set to `1.0` — not limited to OnePlus devices.
+- All raw pixel data, color profiles, lens corrections, and EXIF metadata are preserved.
+- If the file is already 4:3, the script exits without making any changes.
+- May work on other devices with the same `DefaultScale` metadata bug.
